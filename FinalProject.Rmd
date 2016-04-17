@@ -1,0 +1,201 @@
+---
+title: "Prediction Assignment Writeup"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+
+## What must be done
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+
+## Data Background
+
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+
+## Preparation steps
+
+```{r}
+
+library(knitr)
+library(caret)
+library(randomForest)
+library(corrplot)
+set.seed(87945)
+
+```
+
+
+
+## Load the data
+
+```{r}
+setwd("C:/SD Storage/Dropbox/work/Coursera/Data Science/Practical Machine Learning")
+
+```
+
+
+
+# read the data
+```{r}
+
+training_file <- "pml-training.csv"
+testing_file <- "pml-testing.csv"
+
+download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", training_file, mode="wb")
+download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", testing_file, mode="wb")
+
+
+training <- read.csv("pml-training.csv")
+testing  <- read.csv("pml-testing.csv")
+
+
+```
+
+
+# prepare the data for training
+
+```{r}
+train_partition  <- createDataPartition(y=training$classe, p=0.7, list=F)
+
+training_data_set <- training[train_partition, ]
+test_data_set  <- training[-train_partition, ]
+
+
+```
+
+## remove the unused columns
+
+```{r}
+columns_filter <- grep("name|timestamp|window|X", colnames(training_data_set), value=F) 
+
+training_data_set <- training_data_set[,-columns_filter]
+
+training_data_set[training_data_set==""] <- NA
+
+EmptyValues <- apply(training_data_set, 2, function(x) sum(is.na(x)))/nrow(training_data_set)
+
+training_data_set <- training_data_set[!(EmptyValues>0.95)]
+
+
+
+```
+
+
+
+
+
+```
+
+
+## let now do the principal component analysis
+
+```{r}
+pca_data <- preProcess(training_data_set[,1:52],method="pca",thresh=.8) 
+pca_data <- preProcess(training_data_set[,1:52],method="pca",thresh=.9) 
+pca_data <- preProcess(training_data_set[,1:52],method="pca",thresh=.95) 
+pca_data <- preProcess(training_data_set[,1:52],method="pca",pcaComp=25) 
+
+pca_data$rotation
+
+training_data_set_pca <- predict(pca_data,training_data_set[,1:52])
+
+
+
+```
+
+## apply the random forest technique
+
+
+```{r}
+model_data <- randomForest(training_data_set$classe ~ .,   data=training_data_set_pca, do.trace=F)
+
+# print the results
+print(model_data) 
+
+# check the importance of the predictors
+
+importance(model_data)
+
+```
+
+
+## Now apply the model to the test data set
+
+```{r}
+# Filter the data columns
+
+test_data_set_filtered <- test_data_set[,-columns_filter]
+
+# Filter values 
+test_data_set_filtered[test_data_set_filtered==""] <- NA
+
+# Remove the NA values
+
+EmptyValues <- apply(test_data_set_filtered, 2, function(x) sum(is.na(x)))/nrow(test_data_set_filtered)
+
+# Remove values almost zero
+test_data_set_filtered <- test_data_set_filtered[!(EmptyValues>0.95)]
+
+# Get the PCA for the testing data
+test_data_set_pca <- predict(pca_data,test_data_set_filtered[,1:52])
+
+# create a confusion matrix
+confusionMatrix(test_data_set_filtered$classe,predict(model_data,test_data_set_pca))
+
+
+
+```
+
+## Do the prediction for the quiz
+
+```{r}
+
+
+testing_filtered <- testing[,-columns_filter]
+
+testing_filtered[testing_filtered==""] <- NA
+
+EmptyValues <- apply(testing_filtered, 2, function(x) sum(is.na(x)))/nrow(testing_filtered)
+
+
+testing_filtered <- testing_filtered[!(EmptyValues>0.95)]
+
+
+testing_pca <- predict(pca_data,testing_filtered[,1:52])
+
+testing_filtered$classe <- predict(model_data,testing_pca)
+
+#Print the testing for the quiz
+
+testing_filtered
+
+```
+
+
+
+
+
